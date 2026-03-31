@@ -1,12 +1,18 @@
-"use client";
+export const dynamic = "force-dynamic";
 
-// Cette ligne indique à Vercel de ne pas essayer de pré-générer la page (évite l'erreur de build)
-export const dynamic = "force-dynamic"; 
+export const metadata = {
+  title: "Fitness Postpartum 🌸",
+  description: "Ton programme de remise en forme personnalisé",
+};
 
-import { useState, useEffect, useCallback, useMemo } from "react";
-// Assure-toi d'avoir bien fait : npm install recharts
-import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Area, AreaChart } from "recharts";
-
-// Le reste de ton code (const F, const C, etc.)
-const F = `'Nunito', sans-serif`;
-// ...
+export default function RootLayout({ children }) {
+  return (
+    <html lang="fr">
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+      </head>
+      <body>{children}</body>
+    </html>
+  );
+}

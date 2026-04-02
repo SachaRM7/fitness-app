@@ -883,9 +883,9 @@ export default function App() {
     const anchor = latestCompletionTs ? new Date(latestCompletionTs) : new Date();
     anchor.setHours(12, 0, 0, 0);
 
-    for (let i = 6; i >= 0; i--) {
+    for (let i = 0; i < 7; i++) {
       const d = new Date(anchor);
-      d.setDate(anchor.getDate() - i);
+      d.setDate(anchor.getDate() + i);
       arr.push(d);
     }
     return arr;

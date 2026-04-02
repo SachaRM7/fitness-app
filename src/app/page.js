@@ -894,9 +894,17 @@ export default function App() {
   const currentStreak = useMemo(() => {
     if (!latestCompletionTs) return 0;
 
+    const today = new Date();
+    today.setHours(12, 0, 0, 0);
+
+    const latest = new Date(latestCompletionTs);
+    latest.setHours(12, 0, 0, 0);
+
+    const dayDiff = Math.round((today - latest) / 86400000);
+    if (dayDiff > 1) return 0;
+
     let streak = 0;
-    const cursor = new Date(latestCompletionTs);
-    cursor.setHours(12, 0, 0, 0);
+    const cursor = new Date(latest);
 
     while (completedDaySet.has(dayKey(cursor))) {
       streak += 1;

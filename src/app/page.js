@@ -844,9 +844,18 @@ export default function App() {
   const weekData = program.find(w => w.week === currentWeek);
   const phase = PHASES.find(p => p.weeks.includes(currentWeek));
   const sessions = weekData?.sessions || [];
-  const doneThisWeek = sessions.filter(s => typeof progress[s.id] === "number").length;
+  const getCompletionTimestamp = useCallback((value) => {
+    if (typeof value === "number" && Number.isFinite(value)) return Number(value);
+    if (value && typeof value === "object") {
+      if (typeof value.completedAt === "number" && Number.isFinite(value.completedAt)) return Number(value.completedAt);
+      if (typeof value.endsAt === "number" && Number.isFinite(value.endsAt)) return Number(value.endsAt);
+    }
+    return null;
+  }, []);
+
+  const doneThisWeek = sessions.filter(s => Number.isFinite(getCompletionTimestamp(progress[s.id]))).length;
   const weekComplete = doneThisWeek === sessions.length && sessions.length > 0;
-  const totalDone = Object.keys(progress).length;
+  const totalDone = Object.values(progress).filter(v => Number.isFinite(getCompletionTimestamp(v))).length;
   const totalSessions = program.reduce((a, w) => a + w.sessions.length, 0);
 
   const dayKey = (d) => {
@@ -857,19 +866,10 @@ export default function App() {
   };
 
   const sessionCompletionTimestamps = useMemo(() => {
-    return Object.entries(progress)
-      .map(([, value]) => {
-        if (typeof value === "number") return Number(value);
-        if (value && typeof value === "object") {
-          if (typeof value.completedAt === "number") return Number(value.completedAt);
-          if (typeof value.endsAt === "number" && typeof value.exerciseIndex === "number") {
-            return Number(value.endsAt);
-          }
-        }
-        return null;
-      })
+    return Object.values(progress)
+      .map((value) => getCompletionTimestamp(value))
       .filter((ts) => Number.isFinite(ts));
-  }, [progress]);
+  }, [progress, getCompletionTimestamp]);
 
   const completedDaySet = useMemo(
     () => new Set(sessionCompletionTimestamps.map((ts) => dayKey(new Date(ts)))),
@@ -1140,7 +1140,7 @@ export default function App() {
           {PHASES.map(p => {
             const pW = program.filter(w => p.weeks.includes(w.week));
             const pS = pW.flatMap(w => w.sessions);
-            const pDone = pS.filter(s => typeof progress[s.id] === "number").length;
+            const pDone = pS.filter(s => Number.isFinite(getCompletionTimestamp(progress[s.id]))).length;
             const locked = p.weeks[0] > currentWeek;
             const isActive = p.weeks.includes(currentWeek);
             return (

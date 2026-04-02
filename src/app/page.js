@@ -10,15 +10,27 @@ const FD = `'Cormorant Garamond', serif`;
 const LINK = "https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Nunito:wght@400;500;600;700;800&display=swap";
 
 const C = {
-  bg: "#FAF5F0", card: "#FFFFFF", text: "#3A2D2F", sub: "#9B8589",
-  accent: "#D46B7B", accentLight: "#F6DFE2", accentDark: "#B8505F",
-  success: "#6BAF7B", successLight: "#E4F3E8",
-  phase1: "#E8B4B8", phase2: "#A8C8DC", phase3: "#B5D4A7",
-  border: "#EDE4DE", danger: "#E07070",
+  bg: "#FAF5F0",
+  card: "#FDFEFE",
+  text: "#2D3436",
+  sub: "#636E72",
+  accent: "#E57373",
+  accentLight: "#FDECEC",
+  accentDark: "#D96060",
+  success: "#81C784",
+  successLight: "#E8F5E9",
+  phase1: "#E8B4B8",
+  phase2: "#A8C8DC",
+  phase3: "#B5D4A7",
+  border: "#EDE4DE",
+  danger: "#E07070",
   gradient1: "linear-gradient(135deg, #E8B4B8 0%, #F6DFE2 100%)",
   gradient2: "linear-gradient(135deg, #A8C8DC 0%, #D4E6F0 100%)",
   gradient3: "linear-gradient(135deg, #B5D4A7 0%, #DCE9D4 100%)",
 };
+
+const SP = { 1: 4, 2: 8, 3: 16, 4: 24, 5: 32, 6: 48 };
+const R = { container: 16, button: 12, round: "50%" };
 
 const EX = {
   respiration: { name: "Respiration abdominale", icon: "🫁", cat: "Core", desc: "Inspire en gonflant le ventre, expire en rentrant le nombril." },
@@ -232,7 +244,18 @@ async function saveAllData(partial) {
   } catch {}
 }
 
-const btnStyle = { fontFamily: F, fontSize: 14, fontWeight: 700, border: "none", borderRadius: 12, padding: "12px 24px", cursor: "pointer", background: C.accent, color: "#fff" };
+const btnStyle = {
+  fontFamily: F,
+  fontSize: 14,
+  fontWeight: 700,
+  border: "none",
+  borderRadius: R.button,
+  padding: `${SP[3] - 4}px ${SP[4]}px`,
+  cursor: "pointer",
+  background: C.accent,
+  color: "#fff",
+  minHeight: 44,
+};
 
 function Timer({ seconds, totalSeconds, onDone, autoStart = false }) {
   const safeInitialLeft = Math.max(1, seconds);
@@ -348,10 +371,20 @@ function Onboarding({ onDone, onRecoverByFamilyCode }) {
 
 function WeightTracker({ profile, weights, onAddWeight, onBack }) {
   const [newW, setNewW] = useState("");
+  const [isInputFocused, setIsInputFocused] = useState(false);
   const chartData = weights.map(w => ({ date: new Date(w.date).toLocaleDateString("fr-FR", { day: "numeric", month: "short" }), kg: w.kg }));
-  const lost = profile.weight - (weights.length ? weights[weights.length - 1].kg : profile.weight);
-  const remaining = (weights.length ? weights[weights.length - 1].kg : profile.weight) - profile.targetWeight;
-  const bmi = (weights.length ? weights[weights.length - 1].kg : profile.weight) / ((profile.height / 100) ** 2);
+  const currentWeight = (weights.length ? weights[weights.length - 1].kg : profile.weight);
+  const lost = profile.weight - currentWeight;
+  const remaining = currentWeight - profile.targetWeight;
+  const bmi = currentWeight / ((profile.height / 100) ** 2);
+
+  const bmiColor = bmi < 25 ? "#81C784" : bmi < 30 ? "#FFB74D" : "#E57373";
+  const bmiProgress = Math.min(100, Math.max(0, (bmi / 40) * 100));
+  const bmiRadius = 19;
+  const bmiCirc = 2 * Math.PI * bmiRadius;
+  const bmiDashOffset = bmiCirc - (bmiCirc * bmiProgress) / 100;
+  const labelFloated = isInputFocused || !!newW;
+  const showPlaceholder = !labelFloated;
 
   return (
     <div style={{ maxWidth: 480, margin: "0 auto", paddingTop: 20, paddingRight: 16, paddingLeft: 16, paddingBottom: 100 }}>
@@ -360,18 +393,44 @@ function WeightTracker({ profile, weights, onAddWeight, onBack }) {
       <h2 style={{ fontFamily: FD, fontSize: 26, color: C.text, margin: "0 0 4px", fontWeight: 700 }}>Suivi du poids</h2>
       <p style={{ fontFamily: F, fontSize: 13, color: C.sub, margin: "0 0 20px" }}>Pèse-toi 1× par semaine, le matin à jeun. Le programme s'adapte automatiquement.</p>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8, marginBottom: 20 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 20 }}>
         {[
           { label: "Perdu", value: `${lost >= 0 ? "-" : "+"}${Math.abs(lost).toFixed(1)}`, unit: "kg", color: lost >= 0 ? C.success : C.danger },
-          { label: "Actuel", value: (weights.length ? weights[weights.length - 1].kg : profile.weight).toFixed(1), unit: "kg", color: C.accent },
+          { label: "Actuel", value: currentWeight.toFixed(1), unit: "kg", color: C.accent },
           { label: "Restant", value: remaining > 0 ? remaining.toFixed(1) : "0", unit: "kg", color: C.phase2 },
-          { label: "IMC", value: bmi.toFixed(1), unit: "", color: bmi < 25 ? C.success : bmi < 30 ? C.accent : C.danger },
         ].map((s, i) => (
-          <div key={i} style={{ background: C.card, borderRadius: 12, padding: "10px 6px", textAlign: "center", border: `1px solid ${C.border}` }}>
+          <div key={i} style={{ background: "#FFFFFF", borderRadius: 12, padding: "12px 10px", textAlign: "center", border: "1px solid #F1F2F6", boxShadow: "0 4px 12px rgba(0,0,0,0.05)" }}>
             <div style={{ fontFamily: F, fontSize: 10, color: C.sub, fontWeight: 600, letterSpacing: 0.5, textTransform: "uppercase" }}>{s.label}</div>
-            <div style={{ fontFamily: F, fontSize: 18, fontWeight: 800, color: s.color, margin: "3px 0 0" }}>{s.value}<span style={{ fontSize: 10, fontWeight: 600, color: C.sub }}> {s.unit}</span></div>
+            <div style={{ fontFamily: F, fontSize: 20, fontWeight: 800, color: s.color, margin: "4px 0 0" }}>
+              {s.value}<span style={{ fontSize: 10, fontWeight: 600, color: C.sub }}> {s.unit}</span>
+            </div>
           </div>
         ))}
+        <div style={{ background: "#FFFFFF", borderRadius: 12, padding: "12px 10px", border: "1px solid #F1F2F6", boxShadow: "0 4px 12px rgba(0,0,0,0.05)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+          <div>
+            <div style={{ fontFamily: F, fontSize: 10, color: C.sub, fontWeight: 600, letterSpacing: 0.5, textTransform: "uppercase" }}>IMC</div>
+            <div style={{ fontFamily: F, fontSize: 11, color: C.sub, marginTop: 2 }}>
+              {bmi < 25 ? "Normal" : bmi < 30 ? "Surpoids" : "Obésité"}
+            </div>
+          </div>
+          <svg width="48" height="48" viewBox="0 0 48 48">
+            <circle cx="24" cy="24" r={bmiRadius} fill="none" stroke="#F1F2F6" strokeWidth="5" />
+            <circle
+              cx="24"
+              cy="24"
+              r={bmiRadius}
+              fill="none"
+              stroke={bmiColor}
+              strokeWidth="5"
+              strokeDasharray={bmiCirc}
+              strokeDashoffset={bmiDashOffset}
+              strokeLinecap="round"
+              transform="rotate(-90 24 24)"
+              style={{ transition: "stroke-dashoffset .4s ease" }}
+            />
+            <text x="24" y="27" textAnchor="middle" fontFamily={F} fontSize="9" fontWeight="800" fill="#2D3436">{bmi.toFixed(1)}</text>
+          </svg>
+        </div>
       </div>
 
       {chartData.length >= 2 ? (
@@ -389,21 +448,52 @@ function WeightTracker({ profile, weights, onAddWeight, onBack }) {
           </ResponsiveContainer>
         </div>
       ) : (
-        <div style={{ background: C.accentLight, borderRadius: 14, padding: "20px 16px", textAlign: "center", marginBottom: 20 }}>
-          <div style={{ fontSize: 28, marginBottom: 8 }}>📊</div>
-          <p style={{ fontFamily: F, fontSize: 13, color: C.text, margin: 0 }}>Ajoute au moins 2 pesées pour voir ta courbe !</p>
+        <div style={{ background: "#FFFFFF", borderRadius: 16, padding: "16px 14px", border: "1px solid #F1F2F6", boxShadow: "0 4px 12px rgba(0,0,0,0.05)", marginBottom: 20, opacity: 0.3 }}>
+          <div style={{ height: 10, width: 90, background: "#E5E7EB", borderRadius: 6, marginBottom: 12 }} />
+          <div style={{ height: 140, borderRadius: 10, background: "linear-gradient(180deg, #E5E7EB 0%, #F3F4F6 100%)", position: "relative", overflow: "hidden" }}>
+            <svg viewBox="0 0 320 140" width="100%" height="100%" preserveAspectRatio="none">
+              <path d="M0,110 C35,95 60,118 95,96 C130,74 170,104 210,82 C245,62 280,80 320,52" fill="none" stroke="#9CA3AF" strokeWidth="4" strokeLinecap="round" />
+            </svg>
+          </div>
+          <p style={{ fontFamily: F, fontSize: 12, color: C.text, margin: "10px 0 0" }}>Ajoute au moins 2 pesées pour voir ta courbe.</p>
         </div>
       )}
 
       <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
         <div style={{ position: "relative", flex: 1 }}>
-          <input type="number" step="0.1" value={newW} onChange={e => setNewW(e.target.value)} placeholder="Ex: 70.5"
+          <label
+            style={{
+              position: "absolute",
+              left: 12,
+              top: labelFloated ? -8 : 8,
+              fontFamily: F,
+              fontSize: labelFloated ? 11 : 13,
+              fontWeight: 600,
+              color: labelFloated ? C.accent : C.sub,
+              background: "#FFFFFF",
+              padding: labelFloated ? "0 4px" : 0,
+              transition: "all .18s ease",
+              pointerEvents: "none",
+            }}
+          >
+            Poids (kg)
+          </label>
+          <input
+            type="number"
+            step="0.1"
+            value={newW}
+            onChange={e => setNewW(e.target.value)}
+            placeholder={showPlaceholder ? "Ex: 70.5" : ""}
             onKeyDown={e => { if (e.key === "Enter" && newW) { onAddWeight(Number(newW)); setNewW(""); } }}
-            style={{ fontFamily: F, fontSize: 16, fontWeight: 600, width: "100%", padding: "12px 50px 12px 16px", border: `2px solid ${C.border}`, borderRadius: 12, background: C.card, color: C.text, outline: "none", boxSizing: "border-box" }}
-            onFocus={e => e.target.style.borderColor = C.accent} onBlur={e => e.target.style.borderColor = C.border} />
-          <span style={{ position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)", fontFamily: F, fontSize: 13, color: C.sub, fontWeight: 600 }}>kg</span>
+            style={{ fontFamily: F, fontSize: 15, fontWeight: 600, width: "100%", padding: "24px 50px 8px 12px", border: `1.5px solid ${isInputFocused ? C.accent : "#F1F2F6"}`, borderRadius: 12, background: "#FFFFFF", color: C.text, outline: "none", boxSizing: "border-box", boxShadow: "0 4px 12px rgba(0,0,0,0.05)" }}
+            onFocus={() => setIsInputFocused(true)}
+            onBlur={() => setIsInputFocused(false)}
+          />
+          <span style={{ position: "absolute", right: 14, top: "50%", transform: "translateY(-30%)", fontFamily: F, fontSize: 12, color: C.sub, fontWeight: 700 }}>kg</span>
         </div>
-        <button onClick={() => { if (newW) { onAddWeight(Number(newW)); setNewW(""); } }} style={{ ...btnStyle, padding: "12px 20px", opacity: newW ? 1 : 0.4 }}>+ Ajouter</button>
+        <button onClick={() => { if (newW) { onAddWeight(Number(newW)); setNewW(""); } }} style={{ fontFamily: F, fontSize: 14, fontWeight: 800, border: "none", borderRadius: 12, padding: "12px 18px", cursor: "pointer", background: "#E57373", color: "#FFFFFF", opacity: newW ? 1 : 0.45 }}>
+          + Ajouter
+        </button>
       </div>
 
       {weights.length > 0 && (
@@ -434,6 +524,7 @@ function WeightTracker({ profile, weights, onAddWeight, onBack }) {
 function SessionView({ session, weekNum, onComplete, onBack, alreadyDone, persistedState, onSessionStateChange }) {
   const initialDone = useMemo(() => new Set(persistedState?.doneIndices || []), [persistedState]);
   const [done, setDone] = useState(initialDone);
+  const [recentDoneIndex, setRecentDoneIndex] = useState(null);
   const [curSet, setCurSet] = useState((persistedState?.setsDone || 0) + 1);
   const [showTimer, setShowTimer] = useState(persistedState?.pendingRest?.exerciseIndex ?? null);
   const [timerSeconds, setTimerSeconds] = useState(0);
@@ -471,8 +562,14 @@ function SessionView({ session, weekNum, onComplete, onBack, alreadyDone, persis
     persistSessionState(completed, curSet, null);
   }, [persistedState, done, curSet, persistSessionState]);
 
+  useEffect(() => {
+    if (recentDoneIndex === null) return;
+    const t = setTimeout(() => setRecentDoneIndex(null), 500);
+    return () => clearTimeout(t);
+  }, [recentDoneIndex]);
+
   return (
-    <div style={{ maxWidth: 480, margin: "0 auto", paddingTop: 20, paddingRight: 16, paddingLeft: 16, paddingBottom: 100 }}>
+    <div style={{ maxWidth: 480, margin: "0 auto", paddingTop: 20, paddingRight: 16, paddingLeft: 16, paddingBottom: 170 }}>
       <button onClick={onBack} style={{ fontFamily: F, background: "none", border: "none", color: C.sub, fontSize: 14, cursor: "pointer", padding: 0, marginBottom: 16 }}>← Retour</button>
       <div style={{ background: phase.gradient, borderRadius: 18, padding: "20px 20px 16px", marginBottom: 20 }}>
         <div style={{ fontFamily: F, fontSize: 11, color: C.sub, fontWeight: 600, letterSpacing: 1, textTransform: "uppercase" }}>Semaine {weekNum} · Série {curSet}/{session.sets}</div>
@@ -489,9 +586,39 @@ function SessionView({ session, weekNum, onComplete, onBack, alreadyDone, persis
         {session.exercises.map((ex, i) => {
           const isDone = done.has(i);
           return (
-            <div key={i} style={{ padding: "14px 16px", background: isDone ? C.successLight : C.card, borderRadius: 14, border: `1px solid ${isDone ? C.success + "44" : C.border}`, opacity: isDone ? 0.65 : 1, transition: "all .3s" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <div style={{ width: 40, height: 40, borderRadius: 10, background: isDone ? C.success + "22" : C.accentLight, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>{isDone ? "✓" : ex.icon}</div>
+            <div
+              key={i}
+              style={{
+                minHeight: 80,
+                padding: 16,
+                background: isDone ? "#E8F5E9" : C.card,
+                borderRadius: 14,
+                border: `1px solid ${isDone ? "#4CAF5033" : C.border}`,
+                opacity: isDone ? 0.9 : 1,
+                transition: "all .35s ease",
+                display: "flex",
+                alignItems: "center",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 12, width: "100%" }}>
+                <div
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 10,
+                    background: isDone ? "#4CAF501A" : C.accentLight,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: 18,
+                    flexShrink: 0,
+                    color: isDone ? "#4CAF50" : C.text,
+                    transform: isDone && recentDoneIndex === i ? "scale(1.12)" : "scale(1)",
+                    transition: "transform .5s cubic-bezier(.2,.8,.2,1)",
+                  }}
+                >
+                  {isDone ? "✓" : ex.icon}
+                </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontFamily: F, fontWeight: 700, fontSize: 14, color: C.text }}>{ex.name}</div>
                   <div style={{ fontFamily: F, fontSize: 12, color: C.accent, marginTop: 1, fontWeight: 700 }}>{ex.reps}</div>
@@ -502,6 +629,7 @@ function SessionView({ session, weekNum, onComplete, onBack, alreadyDone, persis
                     const nextDone = new Set(done);
                     nextDone.delete(i);
                     setDone(nextDone);
+                    setRecentDoneIndex(null);
                     if (showTimer === i) {
                       setShowTimer(null);
                       setTimerSeconds(0);
@@ -525,43 +653,88 @@ function SessionView({ session, weekNum, onComplete, onBack, alreadyDone, persis
                     const nextDone = new Set(done);
                     nextDone.add(i);
                     setDone(nextDone);
+                    setRecentDoneIndex(i);
                     persistSessionState(nextDone, curSet, null);
                   }
-                }} style={{ fontFamily: F, fontSize: 12, fontWeight: 700, border: "none", borderRadius: 10, padding: "7px 14px", cursor: "pointer", background: isDone ? C.successLight : C.accentLight, color: isDone ? C.success : C.accent, flexShrink: 0 }}>
+                }} style={{ fontFamily: F, fontSize: 12, fontWeight: 700, border: "none", borderRadius: 10, padding: "7px 14px", cursor: "pointer", background: isDone ? "#E8F5E9" : C.accentLight, color: isDone ? "#4CAF50" : C.accent, flexShrink: 0 }}>
                   {isDone ? "Décocher" : "Fait ✓"}
                 </button>
               </div>
-              {showTimer === i && ex.rest > 0 && !isDone && <Timer seconds={timerSeconds || ex.rest} totalSeconds={timerTotalSeconds || ex.rest} autoStart onDone={() => {
-                const nextDone = new Set(done);
-                nextDone.add(i);
-                setDone(nextDone);
-                setShowTimer(null);
-                setTimerSeconds(0);
-                setTimerTotalSeconds(0);
-                persistSessionState(nextDone, curSet, null);
-              }} />}
             </div>
           );
         })}
       </div>
 
+      {showTimer !== null && session.exercises[showTimer] && !done.has(showTimer) && (
+        <div
+          style={{
+            position: "fixed",
+            left: "50%",
+            transform: "translateX(-50%)",
+            bottom: allDone ? 104 : 24,
+            width: "min(448px, calc(100vw - 24px))",
+            background: "#FFFFFFEE",
+            backdropFilter: "blur(8px)",
+            WebkitBackdropFilter: "blur(8px)",
+            border: `1px solid ${C.border}`,
+            borderRadius: 16,
+            boxShadow: "0 10px 30px rgba(0,0,0,0.12)",
+            padding: "14px 16px",
+            zIndex: 101,
+          }}
+        >
+          <div style={{ fontFamily: F, fontSize: 11, fontWeight: 800, color: C.sub, textTransform: "uppercase", letterSpacing: 0.8 }}>Repose-toi</div>
+          <div style={{ fontFamily: F, fontSize: 13, color: C.text, marginTop: 2 }}>{session.exercises[showTimer].name}</div>
+          <div style={{ marginTop: 10 }}>
+            <Timer seconds={timerSeconds || session.exercises[showTimer].rest} totalSeconds={timerTotalSeconds || session.exercises[showTimer].rest} autoStart onDone={() => {
+              const nextDone = new Set(done);
+              nextDone.add(showTimer);
+              setDone(nextDone);
+              setRecentDoneIndex(showTimer);
+              setShowTimer(null);
+              setTimerSeconds(0);
+              setTimerTotalSeconds(0);
+              persistSessionState(nextDone, curSet, null);
+            }} />
+          </div>
+        </div>
+      )}
+
       {allDone && (
-        <button onClick={() => {
-          if (curSet < session.sets) {
-            const nextSet = curSet + 1;
-            setCurSet(nextSet);
-            setDone(new Set());
-            setShowTimer(null);
-            setTimerSeconds(0);
-            setTimerTotalSeconds(0);
-            persistSessionState(new Set(), nextSet, null);
-          } else {
-            onComplete();
-          }
-        }}
-          style={{ ...btnStyle, width: "100%", padding: "14px 0", marginTop: 20, background: curSet < session.sets ? `linear-gradient(135deg, ${C.accent}, ${C.accentDark})` : `linear-gradient(135deg, ${C.success}, #4A9A5A)`, boxShadow: "0 4px 14px rgba(0,0,0,.12)" }}>
-          {curSet < session.sets ? `Série terminée → Série ${curSet + 1}` : "🎉 Séance terminée !"}
-        </button>
+        <div
+          style={{
+            position: "fixed",
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 100,
+            backdropFilter: "blur(8px)",
+            WebkitBackdropFilter: "blur(8px)",
+            background: "rgba(250,245,240,0.76)",
+            borderTop: `1px solid ${C.border}`,
+            padding: "12px 16px calc(12px + env(safe-area-inset-bottom))",
+          }}
+        >
+          <div style={{ maxWidth: 480, margin: "0 auto" }}>
+            <button onClick={() => {
+              if (curSet < session.sets) {
+                const nextSet = curSet + 1;
+                setCurSet(nextSet);
+                setDone(new Set());
+                setRecentDoneIndex(null);
+                setShowTimer(null);
+                setTimerSeconds(0);
+                setTimerTotalSeconds(0);
+                persistSessionState(new Set(), nextSet, null);
+              } else {
+                onComplete();
+              }
+            }}
+              style={{ ...btnStyle, width: "100%", padding: "14px 0", background: curSet < session.sets ? `linear-gradient(135deg, ${C.accent}, ${C.accentDark})` : `linear-gradient(135deg, ${C.success}, #4A9A5A)`, boxShadow: "0 4px 14px rgba(0,0,0,.12)" }}>
+              {curSet < session.sets ? `Série terminée → Série ${curSet + 1}` : "🎉 Séance terminée !"}
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -792,20 +965,55 @@ export default function App() {
         </button>
 
         <h3 style={{ fontFamily: FD, fontSize: 18, color: C.text, margin: "0 0 12px", fontWeight: 600 }}>Les 3 phases</h3>
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <div style={{ display: "flex", flexDirection: "column" }}>
           {PHASES.map(p => {
             const pW = program.filter(w => p.weeks.includes(w.week));
             const pS = pW.flatMap(w => w.sessions);
             const pDone = pS.filter(s => typeof progress[s.id] === "number").length;
             const locked = p.weeks[0] > currentWeek;
+            const isActive = p.weeks.includes(currentWeek);
             return (
-              <div key={p.id} style={{ background: C.card, border: `1.5px solid ${p.weeks.includes(currentWeek) ? p.color : C.border}`, borderRadius: 14, padding: "14px 16px", opacity: locked ? 0.5 : 1 }}>
+              <div
+                key={p.id}
+                style={{
+                  background: isActive ? "#FFF9F9" : C.card,
+                  border: isActive ? "2px solid #E57373" : `1.5px solid ${C.border}`,
+                  borderRadius: 14,
+                  padding: "14px 16px",
+                  opacity: locked ? 0.5 : 1,
+                  filter: locked ? "grayscale(100%)" : "none",
+                  marginBottom: 16,
+                  display: "flex",
+                  flexDirection: "column",
+                }}
+              >
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <div style={{ width: 36, height: 36, borderRadius: 10, background: p.color + "33", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: F, fontSize: 13, fontWeight: 800, color: C.text }}>{p.id}</div>
-                  <div style={{ flex: 1 }}><div style={{ fontFamily: F, fontWeight: 700, fontSize: 14, color: C.text }}>{p.name}</div><div style={{ fontFamily: F, fontSize: 11, color: C.sub }}>Sem. {p.weeks[0]}–{p.weeks[3]} · {pDone}/{pS.length}</div></div>
+                  <div style={{ width: 36, height: 36, borderRadius: 10, background: p.color + "33", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: F, fontSize: 13, fontWeight: 800, color: C.text }}>
+                    {locked ? (
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <rect x="5" y="11" width="14" height="9" rx="2" stroke="#6B7280" strokeWidth="2" />
+                        <path d="M8 11V8a4 4 0 1 1 8 0v3" stroke="#6B7280" strokeWidth="2" strokeLinecap="round" />
+                      </svg>
+                    ) : p.id}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <div style={{ fontFamily: F, fontWeight: 700, fontSize: 14, color: C.text }}>{p.name}</div>
+                      {isActive && (
+                        <span style={{ fontFamily: F, fontSize: 10, fontWeight: 800, color: "#FFFFFF", background: "#E57373", padding: "2px 7px", borderRadius: 999 }}>
+                          En cours
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ fontFamily: F, fontSize: 11, color: C.sub, marginTop: 2 }}>
+                      Sem. {p.weeks[0]}–{p.weeks[3]} · {pDone}/{pS.length}
+                    </div>
+                  </div>
                   {pDone === pS.length && pS.length > 0 && <span style={{ fontSize: 18, color: C.success }}>✓</span>}
                 </div>
-                <div style={{ height: 4, borderRadius: 2, background: C.border, marginTop: 10 }}><div style={{ height: "100%", borderRadius: 2, background: p.color, width: pS.length ? `${(pDone / pS.length) * 100}%` : "0%", transition: "width .5s" }} /></div>
+                <div style={{ height: 4, borderRadius: 2, background: C.border, marginTop: 12 }}>
+                  <div style={{ height: "100%", borderRadius: 2, background: p.color, width: pS.length ? `${(pDone / pS.length) * 100}%` : "0%", transition: "width .5s" }} />
+                </div>
               </div>
             );
           })}

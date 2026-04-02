@@ -20,3 +20,23 @@
 - [x] Implémenter récupération du compte existant depuis onboarding
 - [x] Skipper onboarding si profil trouvé via code famille
 - [ ] Tester les scénarios onboarding + code famille (A/B/C/D)
+- [x] Refactor UI section Suivi du poids en grid 2x2 (cards data-viz)
+- [x] Remplacer affichage IMC par progress circle color-mappé
+- [x] Ajouter empty-state graphique type skeleton curve (opacité 0.3)
+- [x] Refaire input poids avec floating label + bouton high-emphasis
+- [ ] Tester la section poids (UI + ajout poids + non-régression persistance)
+- [x] Refonte cards "3 phases": active/locked states + badge "En cours"
+- [x] Ajouter lock icon (16px) pour phases verrouillées
+- [x] Ajouter progress bar 4px + valeur done/total par phase
+- [x] Ajuster spacing vertical (16px) entre cartes phases
+- [ ] Tester UI roadmap des phases (états + progression + spacing)
+- [x] Refonte UI liste exercices (items 80px, padding 16, auto-layout horizontal)
+- [x] Ajouter état "Fait" animé (bg #E8F5E9, check #4CAF50, scale-up 0.5s)
+- [x] Refaire timer repos en overlay / bottom sheet flottante (timer monospace 32pt)
+- [x] Passer CTA fin de séance en fixed bottom (z-index 100 + blur backdrop)
+- [ ] Tester UI séance (micro-interactions + timer + CTA fixed + non-régression persistance)
+- [ ] Ajouter Design Tokens globaux (spacing 4px scale, palette, radius)
+- [ ] Aligner styles globaux (containers/buttons/avatars) sur les tokens
+- [ ] Normaliser les espacements principaux avec la scale 4px
+- [ ] Garantir zone de touch min 44x44 sur éléments cliquables
+- [ ] Tester cohérence visuelle globale après tokenisation

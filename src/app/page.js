@@ -142,7 +142,7 @@ const PHASES = [
   { id: 3, name: "Transformation", weeks: [9,10,11,12], color: C.phase3, gradient: C.gradient3, desc: "HIIT adapté, renforcement ciblé, full body." },
 ];
 
-const KEYS = { profile: "mef-profile", progress: "mef-progress", weights: "mef-weights", week: "mef-week", familyCode: "mef-family-code" };
+const KEYS = { profile: "mef-profile", progress: "mef-progress", weights: "mef-weights", week: "mef-week", familyCode: "mef-family-code", imcTooltipSeen: "mef-imc-tooltip-seen" };
 
 function normalizeFamilyCode(code) {
   return (code || "").trim().toLowerCase().replace(/[^a-z0-9-_]/g, "");
@@ -372,6 +372,7 @@ function Onboarding({ onDone, onRecoverByFamilyCode }) {
 function WeightTracker({ profile, weights, onAddWeight, onBack }) {
   const [newW, setNewW] = useState("");
   const [isInputFocused, setIsInputFocused] = useState(false);
+  const [showImcTooltip, setShowImcTooltip] = useState(false);
   const chartData = weights.map(w => ({ date: new Date(w.date).toLocaleDateString("fr-FR", { day: "numeric", month: "short" }), kg: w.kg }));
   const currentWeight = (weights.length ? weights[weights.length - 1].kg : profile.weight);
   const lost = profile.weight - currentWeight;
@@ -386,6 +387,15 @@ function WeightTracker({ profile, weights, onAddWeight, onBack }) {
   const labelFloated = isInputFocused || !!newW;
   const showPlaceholder = !labelFloated;
 
+  useEffect(() => {
+    try {
+      const seen = window.localStorage.getItem(KEYS.imcTooltipSeen);
+      setShowImcTooltip(!seen);
+    } catch {
+      setShowImcTooltip(false);
+    }
+  }, []);
+
   return (
     <div style={{ maxWidth: 480, margin: "0 auto", paddingTop: 20, paddingRight: 16, paddingLeft: 16, paddingBottom: 100 }}>
       <link href={LINK} rel="stylesheet" />
@@ -393,7 +403,7 @@ function WeightTracker({ profile, weights, onAddWeight, onBack }) {
       <h2 style={{ fontFamily: FD, fontSize: 26, color: C.text, margin: "0 0 4px", fontWeight: 700 }}>Suivi du poids</h2>
       <p style={{ fontFamily: F, fontSize: 13, color: C.sub, margin: "0 0 20px" }}>Pèse-toi 1× par semaine, le matin à jeun. Le programme s'adapte automatiquement.</p>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 20 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
         {[
           { label: "Perdu", value: `${lost >= 0 ? "-" : "+"}${Math.abs(lost).toFixed(1)}`, unit: "kg", color: lost >= 0 ? C.success : C.danger },
           { label: "Actuel", value: currentWeight.toFixed(1), unit: "kg", color: C.accent },
@@ -406,7 +416,7 @@ function WeightTracker({ profile, weights, onAddWeight, onBack }) {
             </div>
           </div>
         ))}
-        <div style={{ background: "#FFFFFF", borderRadius: 12, padding: "12px 10px", border: "1px solid #F1F2F6", boxShadow: "0 4px 12px rgba(0,0,0,0.05)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+        <div style={{ background: "#FFFFFF", borderRadius: 12, padding: "12px 10px", border: "1px solid #F1F2F6", boxShadow: "0 4px 12px rgba(0,0,0,0.05)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, position: "relative" }}>
           <div>
             <div style={{ fontFamily: F, fontSize: 10, color: C.sub, fontWeight: 600, letterSpacing: 0.5, textTransform: "uppercase" }}>IMC</div>
             <div style={{ fontFamily: F, fontSize: 11, color: C.sub, marginTop: 2 }}>
@@ -432,6 +442,26 @@ function WeightTracker({ profile, weights, onAddWeight, onBack }) {
           </svg>
         </div>
       </div>
+
+      {showImcTooltip && (
+        <div style={{ background: "#FFF9F2", border: "1px solid #F6D6B8", borderRadius: 12, padding: "10px 12px", marginBottom: 14, display: "flex", alignItems: "flex-start", gap: 8 }}>
+          <span style={{ fontSize: 14, lineHeight: 1 }}>ℹ️</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontFamily: F, fontSize: 12, color: C.text, lineHeight: 1.4 }}>
+              L'IMC est un indicateur parmi d'autres, l'important est ton ressenti !
+            </div>
+            <button
+              onClick={() => {
+                try { window.localStorage.setItem(KEYS.imcTooltipSeen, "1"); } catch {}
+                setShowImcTooltip(false);
+              }}
+              style={{ marginTop: 6, fontFamily: F, fontSize: 11, fontWeight: 700, border: "none", background: "transparent", color: C.accent, cursor: "pointer", padding: 0 }}
+            >
+              Compris
+            </button>
+          </div>
+        </div>
+      )}
 
       {chartData.length >= 2 ? (
         <div style={{ background: C.card, borderRadius: 16, padding: "16px 8px 8px 0", border: `1px solid ${C.border}`, marginBottom: 20 }}>
@@ -582,7 +612,7 @@ function SessionView({ session, weekNum, onComplete, onBack, alreadyDone, persis
 
       {alreadyDone && <div style={{ fontFamily: F, fontSize: 13, color: C.success, fontWeight: 700, background: C.successLight, borderRadius: 10, padding: "10px 14px", marginBottom: 14, textAlign: "center" }}>✓ Déjà validée — refais-la si tu veux !</div>}
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10, opacity: showTimer !== null ? 0.35 : 1, transition: "opacity .25s ease" }}>
         {session.exercises.map((ex, i) => {
           const isDone = done.has(i);
           return (
@@ -684,7 +714,10 @@ function SessionView({ session, weekNum, onComplete, onBack, alreadyDone, persis
           }}
         >
           <div style={{ fontFamily: F, fontSize: 11, fontWeight: 800, color: C.sub, textTransform: "uppercase", letterSpacing: 0.8 }}>Repose-toi</div>
-          <div style={{ fontFamily: F, fontSize: 13, color: C.text, marginTop: 2 }}>{session.exercises[showTimer].name}</div>
+          <div style={{ fontFamily: F, fontSize: 13, color: C.text, marginTop: 2 }}>Exercice en cours : {session.exercises[showTimer].name}</div>
+          <div style={{ fontFamily: F, fontSize: 12, color: C.sub, marginTop: 2 }}>
+            {session.exercises[showTimer + 1] ? `Suivant : ${session.exercises[showTimer + 1].name}` : "Dernier exercice de la série"}
+          </div>
           <div style={{ marginTop: 10 }}>
             <Timer seconds={timerSeconds || session.exercises[showTimer].rest} totalSeconds={timerTotalSeconds || session.exercises[showTimer].rest} autoStart onDone={() => {
               const nextDone = new Set(done);
@@ -782,7 +815,22 @@ export default function App() {
   const totalDone = Object.keys(progress).length;
   const totalSessions = program.reduce((a, w) => a + w.sessions.length, 0);
 
-  if (view === "loading") return <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center" }}><link href={LINK} rel="stylesheet" /><div style={{ fontFamily: FD, fontSize: 22, color: C.accent }}>🌸</div></div>;
+  if (view === "loading") return (
+    <div style={{ minHeight: "100vh", background: C.bg }}>
+      <link href={LINK} rel="stylesheet" />
+      <div style={{ maxWidth: 480, margin: "0 auto", padding: 16 }}>
+        <div style={{ borderRadius: "0 0 32px 32px", background: "#F3ECE8", height: 120, marginBottom: 16, position: "relative", overflow: "hidden" }}>
+          <div style={{ position: "absolute", inset: 0, background: "linear-gradient(90deg, transparent, rgba(255,255,255,.55), transparent)", animation: "shimmer 1.4s infinite" }} />
+        </div>
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} style={{ background: "#EFE7E2", borderRadius: 16, height: i === 2 ? 96 : 72, marginBottom: 12, position: "relative", overflow: "hidden" }}>
+            <div style={{ position: "absolute", inset: 0, background: "linear-gradient(90deg, transparent, rgba(255,255,255,.45), transparent)", animation: "shimmer 1.4s infinite" }} />
+          </div>
+        ))}
+      </div>
+      <style>{`@keyframes shimmer {0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}`}</style>
+    </div>
+  );
 
   if (view === "onboarding") return (
     <Onboarding
@@ -875,9 +923,9 @@ export default function App() {
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               <h1 style={{ fontFamily: FD, fontSize: 24, color: "#2D3436", margin: 0, fontWeight: 600 }}>Hello {profile?.name}</h1>
-              <p style={{ fontFamily: F, fontSize: 12, color: "#636E72", margin: 0, fontWeight: 500 }}>{profile?.age} ans · {profile?.height} cm</p>
+              <p style={{ fontFamily: F, fontSize: 12, color: "#4F5B62", margin: 0, fontWeight: 600 }}>{profile?.age} ans · {profile?.height} cm</p>
             </div>
-            <div style={{ width: 56, height: 56, position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <div style={{ width: 56, height: 56, position: "relative", display: "flex", alignItems: "center", justifyContent: "center", padding: 4, boxSizing: "border-box" }}>
               <svg width="56" height="56" viewBox="0 0 56 56" style={{ position: "absolute", inset: 0 }}>
                 <circle cx="28" cy="28" r={avatarRadius} fill="none" stroke="#F1E6E6" strokeWidth="3" />
                 <circle
@@ -926,7 +974,7 @@ export default function App() {
                 setWeights(data.weights || []);
                 setCurrentWeek(data.week || 1);
               }}
-              style={{ ...btnStyle, padding: "9px 12px", fontSize: 12 }}
+              style={{ fontFamily: F, fontSize: 12, fontWeight: 700, border: `1px solid ${C.accent}`, borderRadius: 10, padding: "8px 10px", minHeight: 40, background: "transparent", color: C.accent, cursor: "pointer" }}
             >
               Enregistrer
             </button>

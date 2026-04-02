@@ -40,3 +40,9 @@
 - [ ] Normaliser les espacements principaux avec la scale 4px
 - [ ] Garantir zone de touch min 44x44 sur éléments cliquables
 - [ ] Tester cohérence visuelle globale après tokenisation
+- [x] Ajuster contraste texte secondaire du Header + padding avatar
+- [x] Alléger bouton "Enregistrer" en style ghost dans Synchronisation
+- [x] Aérer la grille 2x2 du haut dans l'écran poids (gap augmenté)
+- [x] Remplacer loader simple par Smart Skeleton Loading (structure cartes)
+- [x] Ajouter Progressive Disclosure pendant le repos (focus exercice courant + suivant)
+- [x] Ajouter tooltip contextuel IMC affiché une seule fois

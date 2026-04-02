@@ -244,6 +244,12 @@ async function saveAllData(partial) {
   } catch {}
 }
 
+const hapticSuccess = () => {
+  try {
+    if (typeof navigator !== "undefined" && navigator.vibrate) navigator.vibrate(12);
+  } catch {}
+};
+
 const btnStyle = {
   fontFamily: F,
   fontSize: 14,
@@ -559,6 +565,7 @@ function SessionView({ session, weekNum, onComplete, onBack, alreadyDone, persis
   const [showTimer, setShowTimer] = useState(persistedState?.pendingRest?.exerciseIndex ?? null);
   const [timerSeconds, setTimerSeconds] = useState(0);
   const [timerTotalSeconds, setTimerTotalSeconds] = useState(0);
+  const [showConfetti, setShowConfetti] = useState(false);
   const allDone = done.size >= session.exercises.length;
   const phase = PHASES.find(p => p.weeks.includes(weekNum)) || PHASES[0];
 
@@ -669,6 +676,7 @@ function SessionView({ session, weekNum, onComplete, onBack, alreadyDone, persis
                     return;
                   }
 
+                  hapticSuccess();
                   if (ex.rest > 0) {
                     if (showTimer !== null && showTimer !== i) {
                       alert("Termine le repos en cours avant d'en lancer un autre.");
@@ -733,6 +741,27 @@ function SessionView({ session, weekNum, onComplete, onBack, alreadyDone, persis
         </div>
       )}
 
+      {showConfetti && (
+        <div style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 120, overflow: "hidden" }}>
+          {Array.from({ length: 24 }).map((_, i) => (
+            <span
+              key={i}
+              style={{
+                position: "absolute",
+                left: `${5 + (i * 4)}%`,
+                top: "-10%",
+                fontSize: 16 + (i % 4),
+                animation: `confettiFall ${900 + (i % 5) * 180}ms ease-out forwards`,
+                opacity: 0.9,
+              }}
+            >
+              {["🌸", "✨", "🎉", "🌷"][i % 4]}
+            </span>
+          ))}
+          <style>{`@keyframes confettiFall {0%{transform:translateY(0) rotate(0deg)}100%{transform:translateY(120vh) rotate(360deg);opacity:0}}`}</style>
+        </div>
+      )}
+
       {allDone && (
         <div
           style={{
@@ -760,7 +789,12 @@ function SessionView({ session, weekNum, onComplete, onBack, alreadyDone, persis
                 setTimerTotalSeconds(0);
                 persistSessionState(new Set(), nextSet, null);
               } else {
-                onComplete();
+                hapticSuccess();
+                setShowConfetti(true);
+                setTimeout(() => {
+                  setShowConfetti(false);
+                  onComplete();
+                }, 700);
               }
             }}
               style={{ ...btnStyle, width: "100%", padding: "14px 0", background: curSet < session.sets ? `linear-gradient(135deg, ${C.accent}, ${C.accentDark})` : `linear-gradient(135deg, ${C.success}, #4A9A5A)`, boxShadow: "0 4px 14px rgba(0,0,0,.12)" }}>
@@ -814,6 +848,62 @@ export default function App() {
   const weekComplete = doneThisWeek === sessions.length && sessions.length > 0;
   const totalDone = Object.keys(progress).length;
   const totalSessions = program.reduce((a, w) => a + w.sessions.length, 0);
+
+  const dayKey = (d) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  };
+
+  const sessionCompletionTimestamps = useMemo(() => {
+    return Object.entries(progress)
+      .map(([, value]) => {
+        if (typeof value === "number") return Number(value);
+        if (value && typeof value === "object") {
+          if (typeof value.completedAt === "number") return Number(value.completedAt);
+        }
+        return null;
+      })
+      .filter((ts) => Number.isFinite(ts));
+  }, [progress]);
+
+  const completedDaySet = useMemo(
+    () => new Set(sessionCompletionTimestamps.map((ts) => dayKey(new Date(ts)))),
+    [sessionCompletionTimestamps]
+  );
+
+  const latestCompletionTs = useMemo(
+    () => (sessionCompletionTimestamps.length ? Math.max(...sessionCompletionTimestamps) : null),
+    [sessionCompletionTimestamps]
+  );
+
+  const streakDays = useMemo(() => {
+    const arr = [];
+    const anchor = latestCompletionTs ? new Date(latestCompletionTs) : new Date();
+    anchor.setHours(12, 0, 0, 0);
+
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(anchor);
+      d.setDate(anchor.getDate() - i);
+      arr.push(d);
+    }
+    return arr;
+  }, [latestCompletionTs]);
+
+  const currentStreak = useMemo(() => {
+    if (!latestCompletionTs) return 0;
+
+    let streak = 0;
+    const cursor = new Date(latestCompletionTs);
+    cursor.setHours(12, 0, 0, 0);
+
+    while (completedDaySet.has(dayKey(cursor))) {
+      streak += 1;
+      cursor.setDate(cursor.getDate() - 1);
+    }
+    return streak;
+  }, [completedDaySet, latestCompletionTs]);
 
   if (view === "loading") return (
     <div style={{ minHeight: "100vh", background: C.bg }}>
@@ -950,6 +1040,27 @@ export default function App() {
         </div>
 
         <div style={{ paddingRight: 16, paddingLeft: 16 }}>
+          <div style={{ background: C.card, borderRadius: 14, border: `1px solid ${C.border}`, padding: "12px 14px", marginBottom: 14 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <div style={{ fontFamily: F, fontSize: 12, fontWeight: 800, color: C.text }}>Série de victoires</div>
+              <div style={{ fontFamily: F, fontSize: 12, fontWeight: 700, color: C.accent }}>
+                {currentStreak} jour{currentStreak > 1 ? "s" : ""}
+              </div>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 6 }}>
+              {streakDays.map((d, i) => {
+                const done = completedDaySet.has(dayKey(d));
+                return (
+                  <div key={i} style={{ borderRadius: 10, background: done ? "#FFF3F6" : "#F7F7F8", border: `1px solid ${done ? "#F4C6D0" : C.border}`, padding: "8px 4px", textAlign: "center" }}>
+                    <div style={{ fontFamily: F, fontSize: 10, color: C.sub }}>
+                      {d.toLocaleDateString("fr-FR", { weekday: "short" }).slice(0, 2)}
+                    </div>
+                    <div style={{ fontSize: 14, lineHeight: 1.2 }}>{done ? "🌸" : "·"}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
 
         <div style={{ background: C.card, borderRadius: 14, border: `1px solid ${C.border}`, padding: "12px 14px", marginBottom: 14 }}>
           <div style={{ fontFamily: F, fontSize: 12, fontWeight: 800, color: C.text, marginBottom: 8 }}>Synchronisation multi-appareils</div>
@@ -965,6 +1076,7 @@ export default function App() {
             />
             <button
               onClick={async () => {
+                hapticSuccess();
                 const normalized = setFamilyCode(familyCodeInput);
                 setFamilyCodeState(normalized);
                 setFamilyCodeInput(normalized);

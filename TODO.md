@@ -46,3 +46,6 @@
 - [x] Remplacer loader simple par Smart Skeleton Loading (structure cartes)
 - [x] Ajouter Progressive Disclosure pendant le repos (focus exercice courant + suivant)
 - [x] Ajouter tooltip contextuel IMC affiché une seule fois
+- [x] Ajouter haptic feedback sur actions "Fait" et "Enregistrer"
+- [x] Ajouter streak visualizer (7 jours + série actuelle) sur Home
+- [x] Ajouter micro-confetti à la fin de séance

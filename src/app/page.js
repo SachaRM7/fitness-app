@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Area, AreaChart } from "recharts";
+import { doc, getDoc, setDoc } from "firebase/firestore";
+import { db, isFirebaseConfigured } from "../lib/firebase";
 
 const F = `'Nunito', sans-serif`;
 const FD = `'Cormorant Garamond', serif`;
@@ -128,18 +130,125 @@ const PHASES = [
   { id: 3, name: "Transformation", weeks: [9,10,11,12], color: C.phase3, gradient: C.gradient3, desc: "HIIT adapté, renforcement ciblé, full body." },
 ];
 
-async function load(key) { try { const r = await window.storage.get(key); return r?.value ? JSON.parse(r.value) : null; } catch { return null; } }
-async function save(key, val) { try { await window.storage.set(key, JSON.stringify(val)); } catch {} }
-const KEYS = { profile: "mef-profile", progress: "mef-progress", weights: "mef-weights", week: "mef-week" };
+const KEYS = { profile: "mef-profile", progress: "mef-progress", weights: "mef-weights", week: "mef-week", familyCode: "mef-family-code" };
+
+function normalizeFamilyCode(code) {
+  return (code || "").trim().toLowerCase().replace(/[^a-z0-9-_]/g, "");
+}
+
+function getFamilyCode() {
+  if (typeof window === "undefined") return "";
+  return normalizeFamilyCode(window.localStorage.getItem(KEYS.familyCode) || "");
+}
+
+function setFamilyCode(code) {
+  if (typeof window === "undefined") return "";
+  const normalized = normalizeFamilyCode(code);
+  if (normalized) window.localStorage.setItem(KEYS.familyCode, normalized);
+  else window.localStorage.removeItem(KEYS.familyCode);
+  return normalized;
+}
+
+function localLoad(key) {
+  try {
+    const raw = window.localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function localSave(key, val) {
+  try {
+    window.localStorage.setItem(key, JSON.stringify(val));
+  } catch {}
+}
+
+async function loadAllData() {
+  const fallback = {
+    profile: localLoad(KEYS.profile),
+    progress: localLoad(KEYS.progress) || {},
+    weights: localLoad(KEYS.weights) || [],
+    week: localLoad(KEYS.week) || 1,
+  };
+
+  if (!isFirebaseConfigured() || !db || typeof window === "undefined") return fallback;
+
+  try {
+    const familyCode = getFamilyCode();
+    if (!familyCode) return fallback;
+
+    const ref = doc(db, "users", familyCode);
+    const snap = await getDoc(ref);
+
+    if (!snap.exists()) {
+      await setDoc(ref, fallback, { merge: true });
+      return fallback;
+    }
+
+    const data = snap.data() || {};
+    const merged = {
+      profile: data.profile ?? fallback.profile,
+      progress: data.progress ?? fallback.progress,
+      weights: data.weights ?? fallback.weights,
+      week: data.week ?? fallback.week,
+    };
+
+    localSave(KEYS.profile, merged.profile);
+    localSave(KEYS.progress, merged.progress);
+    localSave(KEYS.weights, merged.weights);
+    localSave(KEYS.week, merged.week);
+
+    return merged;
+  } catch {
+    return fallback;
+  }
+}
+
+async function saveAllData(partial) {
+  if (typeof window === "undefined") return;
+
+  const current = {
+    profile: localLoad(KEYS.profile),
+    progress: localLoad(KEYS.progress) || {},
+    weights: localLoad(KEYS.weights) || [],
+    week: localLoad(KEYS.week) || 1,
+  };
+
+  const next = { ...current, ...partial };
+
+  localSave(KEYS.profile, next.profile);
+  localSave(KEYS.progress, next.progress);
+  localSave(KEYS.weights, next.weights);
+  localSave(KEYS.week, next.week);
+
+  if (!isFirebaseConfigured() || !db) return;
+
+  try {
+    const familyCode = getFamilyCode();
+    if (!familyCode) return;
+    const ref = doc(db, "users", familyCode);
+    await setDoc(ref, next, { merge: true });
+  } catch {}
+}
 
 const btnStyle = { fontFamily: F, fontSize: 14, fontWeight: 700, border: "none", borderRadius: 12, padding: "12px 24px", cursor: "pointer", background: C.accent, color: "#fff" };
 
-function Timer({ seconds, onDone }) {
-  const [left, setLeft] = useState(seconds);
-  const [running, setRunning] = useState(false);
+function Timer({ seconds, totalSeconds, onDone, autoStart = false }) {
+  const safeInitialLeft = Math.max(1, seconds);
+  const safeTotal = Math.max(safeInitialLeft, totalSeconds || safeInitialLeft);
+
+  const [left, setLeft] = useState(safeInitialLeft);
+  const [running, setRunning] = useState(autoStart);
+
+  useEffect(() => {
+    setLeft(Math.max(1, seconds));
+    setRunning(autoStart);
+  }, [seconds, autoStart]);
+
   useEffect(() => { if (!running || left <= 0) return; const t = setTimeout(() => setLeft(l => l - 1), 1000); return () => clearTimeout(t); }, [running, left]);
   useEffect(() => { if (left === 0 && running) { setRunning(false); onDone?.(); } }, [left, running]);
-  const pct = ((seconds - left) / seconds) * 100;
+  const pct = ((safeTotal - left) / safeTotal) * 100;
   const rad = 26, circ = 2 * Math.PI * rad;
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 8 }}>
@@ -206,7 +315,7 @@ function WeightTracker({ profile, weights, onAddWeight, onBack }) {
   const bmi = (weights.length ? weights[weights.length - 1].kg : profile.weight) / ((profile.height / 100) ** 2);
 
   return (
-    <div style={{ maxWidth: 480, margin: "0 auto", padding: "20px 16px", paddingBottom: 100 }}>
+    <div style={{ maxWidth: 480, margin: "0 auto", paddingTop: 20, paddingRight: 16, paddingLeft: 16, paddingBottom: 100 }}>
       <link href={LINK} rel="stylesheet" />
       <button onClick={onBack} style={{ fontFamily: F, background: "none", border: "none", color: C.sub, fontSize: 14, cursor: "pointer", padding: 0, marginBottom: 16 }}>← Retour</button>
       <h2 style={{ fontFamily: FD, fontSize: 26, color: C.text, margin: "0 0 4px", fontWeight: 700 }}>Suivi du poids</h2>
@@ -283,15 +392,48 @@ function WeightTracker({ profile, weights, onAddWeight, onBack }) {
   );
 }
 
-function SessionView({ session, weekNum, onComplete, onBack, alreadyDone }) {
-  const [done, setDone] = useState(new Set());
-  const [curSet, setCurSet] = useState(1);
-  const [showTimer, setShowTimer] = useState(null);
+function SessionView({ session, weekNum, onComplete, onBack, alreadyDone, persistedState, onSessionStateChange }) {
+  const initialDone = useMemo(() => new Set(persistedState?.doneIndices || []), [persistedState]);
+  const [done, setDone] = useState(initialDone);
+  const [curSet, setCurSet] = useState((persistedState?.setsDone || 0) + 1);
+  const [showTimer, setShowTimer] = useState(persistedState?.pendingRest?.exerciseIndex ?? null);
+  const [timerSeconds, setTimerSeconds] = useState(0);
+  const [timerTotalSeconds, setTimerTotalSeconds] = useState(0);
   const allDone = done.size >= session.exercises.length;
-  const phase = PHASES.find(p => p.weeks.includes(weekNum));
+  const phase = PHASES.find(p => p.weeks.includes(weekNum)) || PHASES[0];
+
+  const persistSessionState = useCallback((nextDone, nextSet, pendingRest = null) => {
+    onSessionStateChange?.({
+      setsDone: Math.max(0, nextSet - 1),
+      doneIndices: Array.from(nextDone),
+      pendingRest,
+    });
+  }, [onSessionStateChange]);
+
+  useEffect(() => {
+    const pending = persistedState?.pendingRest;
+    if (!pending) return;
+
+    const remaining = Math.ceil((pending.endsAt - Date.now()) / 1000);
+
+    if (remaining > 0) {
+      setShowTimer(pending.exerciseIndex);
+      setTimerSeconds(remaining);
+      setTimerTotalSeconds(Math.max(remaining, pending.initialRest || remaining));
+      return;
+    }
+
+    const completed = new Set(done);
+    completed.add(pending.exerciseIndex);
+    setDone(completed);
+    setShowTimer(null);
+    setTimerSeconds(0);
+    setTimerTotalSeconds(0);
+    persistSessionState(completed, curSet, null);
+  }, [persistedState, done, curSet, persistSessionState]);
 
   return (
-    <div style={{ maxWidth: 480, margin: "0 auto", padding: "20px 16px", paddingBottom: 100 }}>
+    <div style={{ maxWidth: 480, margin: "0 auto", paddingTop: 20, paddingRight: 16, paddingLeft: 16, paddingBottom: 100 }}>
       <button onClick={onBack} style={{ fontFamily: F, background: "none", border: "none", color: C.sub, fontSize: 14, cursor: "pointer", padding: 0, marginBottom: 16 }}>← Retour</button>
       <div style={{ background: phase.gradient, borderRadius: 18, padding: "20px 20px 16px", marginBottom: 20 }}>
         <div style={{ fontFamily: F, fontSize: 11, color: C.sub, fontWeight: 600, letterSpacing: 1, textTransform: "uppercase" }}>Semaine {weekNum} · Série {curSet}/{session.sets}</div>
@@ -316,16 +458,68 @@ function SessionView({ session, weekNum, onComplete, onBack, alreadyDone }) {
                   <div style={{ fontFamily: F, fontSize: 12, color: C.accent, marginTop: 1, fontWeight: 700 }}>{ex.reps}</div>
                   <div style={{ fontFamily: F, fontSize: 11, color: C.sub, marginTop: 2, fontStyle: "italic" }}>{ex.desc}</div>
                 </div>
-                {!isDone && <button onClick={() => { setDone(prev => new Set(prev).add(i)); if (ex.rest > 0) setShowTimer(i); }} style={{ fontFamily: F, fontSize: 12, fontWeight: 700, border: "none", borderRadius: 10, padding: "7px 14px", cursor: "pointer", background: C.accentLight, color: C.accent, flexShrink: 0 }}>Fait ✓</button>}
+                <button onClick={() => {
+                  if (isDone) {
+                    const nextDone = new Set(done);
+                    nextDone.delete(i);
+                    setDone(nextDone);
+                    if (showTimer === i) {
+                      setShowTimer(null);
+                      setTimerSeconds(0);
+                      setTimerTotalSeconds(0);
+                    }
+                    persistSessionState(nextDone, curSet, null);
+                    return;
+                  }
+
+                  if (ex.rest > 0) {
+                    if (showTimer !== null && showTimer !== i) {
+                      alert("Termine le repos en cours avant d'en lancer un autre.");
+                      return;
+                    }
+                    const pendingRest = { exerciseIndex: i, endsAt: Date.now() + ex.rest * 1000, initialRest: ex.rest };
+                    setShowTimer(i);
+                    setTimerSeconds(ex.rest);
+                    setTimerTotalSeconds(ex.rest);
+                    persistSessionState(done, curSet, pendingRest);
+                  } else {
+                    const nextDone = new Set(done);
+                    nextDone.add(i);
+                    setDone(nextDone);
+                    persistSessionState(nextDone, curSet, null);
+                  }
+                }} style={{ fontFamily: F, fontSize: 12, fontWeight: 700, border: "none", borderRadius: 10, padding: "7px 14px", cursor: "pointer", background: isDone ? C.successLight : C.accentLight, color: isDone ? C.success : C.accent, flexShrink: 0 }}>
+                  {isDone ? "Décocher" : "Fait ✓"}
+                </button>
               </div>
-              {showTimer === i && ex.rest > 0 && <Timer seconds={ex.rest} onDone={() => setShowTimer(null)} />}
+              {showTimer === i && ex.rest > 0 && !isDone && <Timer seconds={timerSeconds || ex.rest} totalSeconds={timerTotalSeconds || ex.rest} autoStart onDone={() => {
+                const nextDone = new Set(done);
+                nextDone.add(i);
+                setDone(nextDone);
+                setShowTimer(null);
+                setTimerSeconds(0);
+                setTimerTotalSeconds(0);
+                persistSessionState(nextDone, curSet, null);
+              }} />}
             </div>
           );
         })}
       </div>
 
       {allDone && (
-        <button onClick={() => { if (curSet < session.sets) { setCurSet(s => s + 1); setDone(new Set()); setShowTimer(null); } else onComplete(); }}
+        <button onClick={() => {
+          if (curSet < session.sets) {
+            const nextSet = curSet + 1;
+            setCurSet(nextSet);
+            setDone(new Set());
+            setShowTimer(null);
+            setTimerSeconds(0);
+            setTimerTotalSeconds(0);
+            persistSessionState(new Set(), nextSet, null);
+          } else {
+            onComplete();
+          }
+        }}
           style={{ ...btnStyle, width: "100%", padding: "14px 0", marginTop: 20, background: curSet < session.sets ? `linear-gradient(135deg, ${C.accent}, ${C.accentDark})` : `linear-gradient(135deg, ${C.success}, #4A9A5A)`, boxShadow: "0 4px 14px rgba(0,0,0,.12)" }}>
           {curSet < session.sets ? `Série terminée → Série ${curSet + 1}` : "🎉 Séance terminée !"}
         </button>
@@ -341,27 +535,37 @@ export default function App() {
   const [currentWeek, setCurrentWeek] = useState(1);
   const [view, setView] = useState("loading");
   const [activeSession, setActiveSession] = useState(null);
+  const [familyCode, setFamilyCodeState] = useState("");
+  const [familyCodeInput, setFamilyCodeInput] = useState("");
 
   useEffect(() => {
     (async () => {
-      const [p, pr, w, cw] = await Promise.all([load(KEYS.profile), load(KEYS.progress), load(KEYS.weights), load(KEYS.week)]);
-      setProfile(p); setProgress(pr || {}); setWeights(w || []); setCurrentWeek(cw || 1);
-      setView(p ? "home" : "onboarding");
+      const code = getFamilyCode();
+      setFamilyCodeState(code);
+      setFamilyCodeInput(code);
+      const data = await loadAllData();
+      setProfile(data.profile);
+      setProgress(data.progress || {});
+      setWeights(data.weights || []);
+      setCurrentWeek(data.week || 1);
+      setView(data.profile ? "home" : "onboarding");
     })();
   }, []);
 
   const sv = useCallback(async (p, pr, w, cw) => {
-    if (p !== undefined) { setProfile(p); await save(KEYS.profile, p); }
-    if (pr !== undefined) { setProgress(pr); await save(KEYS.progress, pr); }
-    if (w !== undefined) { setWeights(w); await save(KEYS.weights, w); }
-    if (cw !== undefined) { setCurrentWeek(cw); await save(KEYS.week, cw); }
+    const updates = {};
+    if (p !== undefined) { setProfile(p); updates.profile = p; }
+    if (pr !== undefined) { setProgress(pr); updates.progress = pr; }
+    if (w !== undefined) { setWeights(w); updates.weights = w; }
+    if (cw !== undefined) { setCurrentWeek(cw); updates.week = cw; }
+    await saveAllData(updates);
   }, []);
 
   const program = useMemo(() => profile ? buildAdaptiveProgram(profile, weights) : [], [profile, weights]);
   const weekData = program.find(w => w.week === currentWeek);
   const phase = PHASES.find(p => p.weeks.includes(currentWeek));
   const sessions = weekData?.sessions || [];
-  const doneThisWeek = sessions.filter(s => progress[s.id]).length;
+  const doneThisWeek = sessions.filter(s => typeof progress[s.id] === "number").length;
   const weekComplete = doneThisWeek === sessions.length && sessions.length > 0;
   const totalDone = Object.keys(progress).length;
   const totalSessions = program.reduce((a, w) => a + w.sessions.length, 0);
@@ -372,17 +576,33 @@ export default function App() {
 
   if (view === "weight") return <div style={{ minHeight: "100vh", background: C.bg }}><link href={LINK} rel="stylesheet" /><WeightTracker profile={profile} weights={weights} onBack={() => setView("home")} onAddWeight={async kg => { const w = [...weights, { date: Date.now(), kg }]; await sv(undefined, undefined, w, undefined); }} /></div>;
 
-  if (view === "session" && activeSession) return <div style={{ minHeight: "100vh", background: C.bg }}><link href={LINK} rel="stylesheet" /><SessionView session={activeSession} weekNum={currentWeek} alreadyDone={!!progress[activeSession.id]} onBack={() => { setView("week"); setActiveSession(null); }} onComplete={async () => { await sv(undefined, { ...progress, [activeSession.id]: Date.now() }, undefined, undefined); setView("week"); setActiveSession(null); }} /></div>;
+  if (view === "session" && activeSession) return <div style={{ minHeight: "100vh", background: C.bg }}><link href={LINK} rel="stylesheet" /><SessionView session={activeSession} weekNum={currentWeek} alreadyDone={typeof progress[activeSession.id] === "number"} persistedState={typeof progress[activeSession.id] === "object" ? progress[activeSession.id] : undefined} onSessionStateChange={async (sessionState) => { await sv(undefined, { ...progress, [activeSession.id]: sessionState }, undefined, undefined); }} onBack={() => { setView("week"); setActiveSession(null); }} onComplete={async () => { await sv(undefined, { ...progress, [activeSession.id]: Date.now() }, undefined, undefined); setView("week"); setActiveSession(null); }} /></div>;
 
   if (view === "week") return (
     <div style={{ minHeight: "100vh", background: C.bg }}><link href={LINK} rel="stylesheet" />
-      <div style={{ maxWidth: 480, margin: "0 auto", padding: "20px 16px", paddingBottom: 100 }}>
+      <div style={{ maxWidth: 480, margin: "0 auto", paddingTop: 20, paddingRight: 16, paddingLeft: 16, paddingBottom: 100 }}>
         <button onClick={() => setView("home")} style={{ fontFamily: F, background: "none", border: "none", color: C.sub, fontSize: 14, cursor: "pointer", padding: 0, marginBottom: 16 }}>← Programme</button>
         <div style={{ background: phase.gradient, borderRadius: 20, padding: 22, marginBottom: 24 }}>
           <div style={{ fontFamily: F, fontSize: 11, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", color: C.accent }}>Phase {phase.id} · {phase.name}</div>
           <h2 style={{ fontFamily: FD, fontSize: 28, color: C.text, margin: "4px 0", fontWeight: 700 }}>Semaine {currentWeek}</h2>
           <p style={{ fontFamily: F, fontSize: 13, color: C.sub, margin: "0 0 14px", lineHeight: 1.5 }}>{phase.desc}</p>
-          <div style={{ display: "flex", gap: 5 }}>{sessions.map((s, i) => <div key={i} style={{ height: 5, flex: 1, borderRadius: 3, background: progress[s.id] ? C.success : C.border }} />)}</div>
+          <div style={{ display: "flex", gap: 5 }}>
+            {sessions.map((s, i) => {
+              const isCompleted = typeof progress[s.id] === "number";
+              const isInProgress = typeof progress[s.id] === "object";
+              return (
+                <div
+                  key={i}
+                  style={{
+                    height: 5,
+                    flex: 1,
+                    borderRadius: 3,
+                    background: isCompleted ? C.success : isInProgress ? C.accent : C.border
+                  }}
+                />
+              );
+            })}
+          </div>
           <div style={{ fontFamily: F, fontSize: 12, color: C.sub, marginTop: 6 }}>{doneThisWeek}/{sessions.length} séances</div>
         </div>
         <div style={{ background: C.card, borderRadius: 12, padding: "12px 16px", border: `1px solid ${C.border}`, marginBottom: 20, display: "flex", alignItems: "center", gap: 10 }}>
@@ -391,7 +611,7 @@ export default function App() {
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           {sessions.map((session, idx) => {
-            const isDone = !!progress[session.id];
+            const isDone = typeof progress[session.id] === "number";
             return <button key={session.id} onClick={() => { setActiveSession(session); setView("session"); }}
               style={{ fontFamily: F, textAlign: "left", cursor: "pointer", background: isDone ? C.successLight : C.card, border: `1.5px solid ${isDone ? C.success + "44" : C.border}`, borderRadius: 16, padding: "16px 18px", display: "flex", alignItems: "center", gap: 14, boxShadow: isDone ? "none" : "0 2px 8px rgba(0,0,0,.03)", transition: "transform .15s" }}
               onMouseEnter={e => !isDone && (e.currentTarget.style.transform = "translateY(-1px)")} onMouseLeave={e => e.currentTarget.style.transform = "none"}>
@@ -413,13 +633,46 @@ export default function App() {
 
   return (
     <div style={{ minHeight: "100vh", background: C.bg }}><link href={LINK} rel="stylesheet" />
-      <div style={{ maxWidth: 480, margin: "0 auto", padding: "24px 16px", paddingBottom: 100 }}>
+      <div style={{ maxWidth: 480, margin: "0 auto", paddingTop: 24, paddingRight: 16, paddingLeft: 16, paddingBottom: 100 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
           <div>
             <h1 style={{ fontFamily: FD, fontSize: 26, color: C.text, margin: 0, fontWeight: 700 }}>Hello {profile?.name} 🌸</h1>
             <p style={{ fontFamily: F, fontSize: 13, color: C.sub, margin: "4px 0 0" }}>{profile?.age} ans · {profile?.height} cm · Objectif {profile?.targetWeight} kg</p>
           </div>
           <div style={{ width: 44, height: 44, borderRadius: 14, background: `linear-gradient(135deg, ${C.accent}, ${C.accentDark})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, boxShadow: "0 3px 10px rgba(212,107,123,.3)" }}>🌸</div>
+        </div>
+
+        <div style={{ background: C.card, borderRadius: 14, border: `1px solid ${C.border}`, padding: "12px 14px", marginBottom: 14 }}>
+          <div style={{ fontFamily: F, fontSize: 12, fontWeight: 800, color: C.text, marginBottom: 8 }}>Synchronisation multi-appareils</div>
+          <div style={{ fontFamily: F, fontSize: 11, color: C.sub, marginBottom: 10 }}>
+            Utilise le même code famille sur les 2 appareils pour partager les données.
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <input
+              value={familyCodeInput}
+              onChange={(e) => setFamilyCodeInput(e.target.value)}
+              placeholder="ex: famille-rose"
+              style={{ flex: 1, fontFamily: F, fontSize: 13, border: `1px solid ${C.border}`, borderRadius: 10, padding: "9px 10px", outline: "none" }}
+            />
+            <button
+              onClick={async () => {
+                const normalized = setFamilyCode(familyCodeInput);
+                setFamilyCodeState(normalized);
+                setFamilyCodeInput(normalized);
+                const data = await loadAllData();
+                setProfile(data.profile);
+                setProgress(data.progress || {});
+                setWeights(data.weights || []);
+                setCurrentWeek(data.week || 1);
+              }}
+              style={{ ...btnStyle, padding: "9px 12px", fontSize: 12 }}
+            >
+              Enregistrer
+            </button>
+          </div>
+          <div style={{ fontFamily: F, fontSize: 11, color: familyCode ? C.success : C.sub, marginTop: 8 }}>
+            {familyCode ? `Code actif: ${familyCode}` : "Aucun code actif (mode local uniquement)"}
+          </div>
         </div>
 
         <button onClick={() => setView("weight")} style={{ fontFamily: F, textAlign: "left", cursor: "pointer", width: "100%", background: C.card, border: `1.5px solid ${C.border}`, borderRadius: 18, padding: "18px 20px", marginBottom: 16, display: "flex", alignItems: "center", gap: 16, boxShadow: "0 2px 10px rgba(0,0,0,.03)", transition: "transform .15s" }}
@@ -455,16 +708,16 @@ export default function App() {
           {PHASES.map(p => {
             const pW = program.filter(w => p.weeks.includes(w.week));
             const pS = pW.flatMap(w => w.sessions);
-            const pD = pS.filter(s => progress[s.id]).length;
+            const pDone = pS.filter(s => typeof progress[s.id] === "number").length;
             const locked = p.weeks[0] > currentWeek;
             return (
               <div key={p.id} style={{ background: C.card, border: `1.5px solid ${p.weeks.includes(currentWeek) ? p.color : C.border}`, borderRadius: 14, padding: "14px 16px", opacity: locked ? 0.5 : 1 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                   <div style={{ width: 36, height: 36, borderRadius: 10, background: p.color + "33", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: F, fontSize: 13, fontWeight: 800, color: C.text }}>{p.id}</div>
-                  <div style={{ flex: 1 }}><div style={{ fontFamily: F, fontWeight: 700, fontSize: 14, color: C.text }}>{p.name}</div><div style={{ fontFamily: F, fontSize: 11, color: C.sub }}>Sem. {p.weeks[0]}–{p.weeks[3]} · {pD}/{pS.length}</div></div>
-                  {pD === pS.length && pS.length > 0 && <span style={{ fontSize: 18, color: C.success }}>✓</span>}
+                  <div style={{ flex: 1 }}><div style={{ fontFamily: F, fontWeight: 700, fontSize: 14, color: C.text }}>{p.name}</div><div style={{ fontFamily: F, fontSize: 11, color: C.sub }}>Sem. {p.weeks[0]}–{p.weeks[3]} · {pDone}/{pS.length}</div></div>
+                  {pDone === pS.length && pS.length > 0 && <span style={{ fontSize: 18, color: C.success }}>✓</span>}
                 </div>
-                <div style={{ height: 4, borderRadius: 2, background: C.border, marginTop: 10 }}><div style={{ height: "100%", borderRadius: 2, background: p.color, width: pS.length ? `${(pD / pS.length) * 100}%` : "0%", transition: "width .5s" }} /></div>
+                <div style={{ height: 4, borderRadius: 2, background: C.border, marginTop: 10 }}><div style={{ height: "100%", borderRadius: 2, background: p.color, width: pS.length ? `${(pDone / pS.length) * 100}%` : "0%", transition: "width .5s" }} /></div>
               </div>
             );
           })}

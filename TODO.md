@@ -1,0 +1,16 @@
+- [x] Installer Firebase SDK (`firebase`)
+- [x] Créer `src/lib/firebase.js` (initialisation Firestore)
+- [x] Ajouter variables d'environnement Firebase (`.env.local.example`)
+- [x] Remplacer le stockage `window.storage` par Firestore + fallback localStorage dans `src/app/page.js`
+- [x] Mettre à jour `README.md` avec configuration Firebase
+- [x] Vérifier le build
+- [x] Persister la progression intra-séance (exercices cochés + série en cours)
+- [x] Réhydrater la séance en revenant sur la page
+- [x] Démarrer automatiquement le chrono au clic sur "Fait"
+- [x] Persister le timer de repos en cas de retour/re-ouverture de séance
+- [ ] Implémenter le mode multi-appareils via code famille partagé
+- [ ] Ajouter UI de saisie du code famille + stockage local
+- [ ] Utiliser le code famille comme clé Firestore (`users/{familyCode}`)
+- [ ] Migrer les données locales existantes vers le code famille choisi
+- [ ] Tester le flux multi-appareils (même code sur 2 appareils)
+- [ ] Tester le flux séance (cocher/quitter/revenir)

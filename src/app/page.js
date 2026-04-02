@@ -862,6 +862,9 @@ export default function App() {
         if (typeof value === "number") return Number(value);
         if (value && typeof value === "object") {
           if (typeof value.completedAt === "number") return Number(value.completedAt);
+          if (typeof value.endsAt === "number" && typeof value.exerciseIndex === "number") {
+            return Number(value.endsAt);
+          }
         }
         return null;
       })

@@ -264,9 +264,11 @@ function Timer({ seconds, totalSeconds, onDone, autoStart = false }) {
   );
 }
 
-function Onboarding({ onDone }) {
+function Onboarding({ onDone, onRecoverByFamilyCode }) {
   const [step, setStep] = useState(0);
   const [vals, setVals] = useState(["", "", "", "", ""]);
+  const [familyCodeInput, setFamilyCodeInput] = useState("");
+  const [recovering, setRecovering] = useState(false);
   const fields = [
     { label: "Ton prénom", placeholder: "Marie", type: "text", icon: "👋", sub: "Comment tu t'appelles ?" },
     { label: "Ton âge", placeholder: "30", type: "number", unit: "ans", icon: "🎂", sub: "Pour adapter l'intensité." },
@@ -277,6 +279,19 @@ function Onboarding({ onDone }) {
   const f = fields[step];
   const canNext = vals[step].trim().length > 0;
   const setVal = (v) => { const n = [...vals]; n[step] = v; setVals(n); };
+  const tryRecover = async () => {
+    if (!familyCodeInput.trim() || recovering) return;
+    setRecovering(true);
+    try {
+      const found = await onRecoverByFamilyCode?.(familyCodeInput);
+      if (!found) {
+        alert("Aucun compte trouvé avec ce code. Tu peux continuer l'onboarding.");
+      }
+    } finally {
+      setRecovering(false);
+    }
+  };
+
   const next = () => {
     if (step < 4) setStep(step + 1);
     else onDone({ name: vals[0], age: Number(vals[1]), height: Number(vals[2]), weight: Number(vals[3]), targetWeight: Number(vals[4]) });
@@ -289,6 +304,30 @@ function Onboarding({ onDone }) {
         <div style={{ display: "flex", justifyContent: "center", gap: 6, marginBottom: 32 }}>
           {fields.map((_, i) => <div key={i} style={{ width: i === step ? 24 : 8, height: 8, borderRadius: 4, background: i <= step ? C.accent : C.border, transition: "all .3s" }} />)}
         </div>
+        {step === 0 && (
+          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: "12px", marginBottom: 18, textAlign: "left" }}>
+            <div style={{ fontFamily: F, fontSize: 12, fontWeight: 700, color: C.text, marginBottom: 8 }}>Code famille (optionnel)</div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input
+                type="text"
+                value={familyCodeInput}
+                onChange={(e) => setFamilyCodeInput(e.target.value)}
+                placeholder="ex: famille-rose"
+                style={{ flex: 1, fontFamily: F, fontSize: 13, border: `1px solid ${C.border}`, borderRadius: 10, padding: "9px 10px", outline: "none" }}
+              />
+              <button
+                onClick={tryRecover}
+                disabled={!familyCodeInput.trim() || recovering}
+                style={{ ...btnStyle, fontSize: 12, padding: "9px 12px", opacity: familyCodeInput.trim() && !recovering ? 1 : 0.45 }}
+              >
+                {recovering ? "..." : "Récupérer"}
+              </button>
+            </div>
+            <div style={{ fontFamily: F, fontSize: 11, color: C.sub, marginTop: 8 }}>
+              Si un compte existe déjà avec ce code, l'app charge directement les données.
+            </div>
+          </div>
+        )}
         <div style={{ fontSize: 48, marginBottom: 14 }}>{f.icon}</div>
         <h2 style={{ fontFamily: FD, fontSize: 28, color: C.text, margin: "0 0 6px", fontWeight: 700 }}>{f.label}</h2>
         <p style={{ fontFamily: F, fontSize: 13, color: C.sub, margin: "0 0 24px" }}>{f.sub}</p>
@@ -572,7 +611,27 @@ export default function App() {
 
   if (view === "loading") return <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center" }}><link href={LINK} rel="stylesheet" /><div style={{ fontFamily: FD, fontSize: 22, color: C.accent }}>🌸</div></div>;
 
-  if (view === "onboarding") return <Onboarding onDone={async p => { await sv(p, {}, [{ date: Date.now(), kg: p.weight }], 1); setView("home"); }} />;
+  if (view === "onboarding") return (
+    <Onboarding
+      onDone={async p => { await sv(p, {}, [{ date: Date.now(), kg: p.weight }], 1); setView("home"); }}
+      onRecoverByFamilyCode={async (code) => {
+        const normalized = setFamilyCode(code);
+        setFamilyCodeState(normalized);
+        setFamilyCodeInput(normalized);
+        if (!normalized) return false;
+
+        const data = await loadAllData();
+        if (!data?.profile) return false;
+
+        setProfile(data.profile);
+        setProgress(data.progress || {});
+        setWeights(data.weights || []);
+        setCurrentWeek(data.week || 1);
+        setView("home");
+        return true;
+      }}
+    />
+  );
 
   if (view === "weight") return <div style={{ minHeight: "100vh", background: C.bg }}><link href={LINK} rel="stylesheet" /><WeightTracker profile={profile} weights={weights} onBack={() => setView("home")} onAddWeight={async kg => { const w = [...weights, { date: Date.now(), kg }]; await sv(undefined, undefined, w, undefined); }} /></div>;
 
@@ -631,16 +690,45 @@ export default function App() {
   const latestW = weights.length ? weights[weights.length - 1].kg : profile?.weight;
   const lost = profile ? profile.weight - latestW : 0;
 
+  const headerProgress = totalSessions > 0 ? Math.max(0, Math.min(100, (totalDone / totalSessions) * 100)) : 0;
+  const avatarRadius = 25;
+  const avatarCirc = 2 * Math.PI * avatarRadius;
+  const avatarDashOffset = avatarCirc - (avatarCirc * headerProgress) / 100;
+
   return (
     <div style={{ minHeight: "100vh", background: C.bg }}><link href={LINK} rel="stylesheet" />
-      <div style={{ maxWidth: 480, margin: "0 auto", paddingTop: 24, paddingRight: 16, paddingLeft: 16, paddingBottom: 100 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
-          <div>
-            <h1 style={{ fontFamily: FD, fontSize: 26, color: C.text, margin: 0, fontWeight: 700 }}>Hello {profile?.name} 🌸</h1>
-            <p style={{ fontFamily: F, fontSize: 13, color: C.sub, margin: "4px 0 0" }}>{profile?.age} ans · {profile?.height} cm · Objectif {profile?.targetWeight} kg</p>
+      <div style={{ maxWidth: 480, margin: "0 auto", paddingBottom: 100 }}>
+        <div style={{ background: "linear-gradient(135deg, #FFF5F5 0%, #FFFFFF 100%)", borderRadius: "0 0 32px 32px", padding: 24, marginBottom: 20 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <h1 style={{ fontFamily: FD, fontSize: 24, color: "#2D3436", margin: 0, fontWeight: 600 }}>Hello {profile?.name}</h1>
+              <p style={{ fontFamily: F, fontSize: 12, color: "#636E72", margin: 0, fontWeight: 500 }}>{profile?.age} ans · {profile?.height} cm</p>
+            </div>
+            <div style={{ width: 56, height: 56, position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <svg width="56" height="56" viewBox="0 0 56 56" style={{ position: "absolute", inset: 0 }}>
+                <circle cx="28" cy="28" r={avatarRadius} fill="none" stroke="#F1E6E6" strokeWidth="3" />
+                <circle
+                  cx="28"
+                  cy="28"
+                  r={avatarRadius}
+                  fill="none"
+                  stroke="#E57373"
+                  strokeWidth="3"
+                  strokeDasharray={avatarCirc}
+                  strokeDashoffset={avatarDashOffset}
+                  strokeLinecap="round"
+                  transform="rotate(-90 28 28)"
+                  style={{ transition: "stroke-dashoffset .45s ease" }}
+                />
+              </svg>
+              <div style={{ width: 46, height: 46, borderRadius: "50%", background: "linear-gradient(135deg, #FDECEC 0%, #FFFFFF 100%)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>
+                🌸
+              </div>
+            </div>
           </div>
-          <div style={{ width: 44, height: 44, borderRadius: 14, background: `linear-gradient(135deg, ${C.accent}, ${C.accentDark})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, boxShadow: "0 3px 10px rgba(212,107,123,.3)" }}>🌸</div>
         </div>
+
+        <div style={{ paddingRight: 16, paddingLeft: 16 }}>
 
         <div style={{ background: C.card, borderRadius: 14, border: `1px solid ${C.border}`, padding: "12px 14px", marginBottom: 14 }}>
           <div style={{ fontFamily: F, fontSize: 12, fontWeight: 800, color: C.text, marginBottom: 8 }}>Synchronisation multi-appareils</div>
@@ -725,6 +813,7 @@ export default function App() {
 
         <div style={{ textAlign: "center", marginTop: 40 }}>
           <button onClick={async () => { if (confirm("Tout réinitialiser ?")) { await sv(null, {}, [], 1); setView("onboarding"); } }} style={{ fontFamily: F, background: "none", border: "none", color: C.sub, fontSize: 11, cursor: "pointer", textDecoration: "underline", opacity: 0.5 }}>Réinitialiser</button>
+        </div>
         </div>
       </div>
     </div>

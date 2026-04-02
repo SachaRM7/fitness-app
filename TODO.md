@@ -14,3 +14,9 @@
 - [ ] Migrer les données locales existantes vers le code famille choisi
 - [ ] Tester le flux multi-appareils (même code sur 2 appareils)
 - [ ] Tester le flux séance (cocher/quitter/revenir)
+- [x] Refonte design section Header & Profil (Home)
+- [ ] Vérification UI ciblée de la Home
+- [x] Ajouter saisie du code famille dans l'onboarding (étape prénom)
+- [x] Implémenter récupération du compte existant depuis onboarding
+- [x] Skipper onboarding si profil trouvé via code famille
+- [ ] Tester les scénarios onboarding + code famille (A/B/C/D)

@@ -10,13 +10,19 @@
   },
   "dependencies": {
     "firebase": "^12.11.0",
-    "next": "16.2.1",
+    "next": "16.4.2",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "recharts": "^3.8.1"
   },
   "devDependencies": {
     "eslint": "^9",
-    "eslint-config-next": "16.2.1"
+    "eslint-config-next": "16.4.2"
+  },
+  "engines": {
+    "node": "^24.22.1"
+  },
+  "overrides": {
+    "@grpc/grpc-js": "^1.13.7"
   }
 }
